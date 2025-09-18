@@ -1,15 +1,123 @@
 import con from '../db/db.js';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3 } from "../config/awsConfig.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 
+async function getImageUrl(key) {
+  if (!key) return null;
+  const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
 
+  const command = new GetObjectCommand({
+    Bucket: "deligo.image",
+    Key: cleanedKey, 
+  });
+
+  return await getSignedUrl(s3, command, { expiresIn: 3600 });
+}
+
+//==== All product base on vendor====
+// export const getProduct = async (req, res) => {
+//   try {
+//     const { categoryId, vendorId,userId } = req.query;
+
+//     if (!categoryId || !vendorId || !userId) {
+//       return res.status(400).json({
+//         status: false,
+//         message: 'category_id and vendor_id are required'
+//       });
+//     }
+
+//     // Step 1: Get subcategories
+//     const [subcategories] = await con.query(
+//       `SELECT category_name AS id, parent_id, category_name AS name, category_image ,icon
+//        FROM hr_category 
+//        WHERE parent_id = ? AND is_active = 1`,
+//       [categoryId]
+//     );
+
+//     // Optional: Add "All" or static categories
+//     const categorylst = [
+//       {
+//         id: 'all',
+//         parent_id: categoryId,
+//         name: 'All',
+//         icon: '' // or a default image URL
+//       }
+//     ];
+
+//     const totalCategories = [...categorylst, ...subcategories];
+
+//     // Step 2: Get products with subcategory names
+//     const [products] = await con.query(
+//       `SELECT 
+//     p.*,
+//     c.cid,
+//     c.category_name,
+//     CASE WHEN w.product_id IS NOT NULL THEN 1 ELSE 0 END AS is_wishlist
+// FROM 
+//     hr_product p
+// JOIN 
+//     hr_category c 
+//     ON p.product_sub_cat = c.cid
+// LEFT JOIN 
+//     hr_wishlist_product w
+//     ON w.product_id = p.pid AND w.user_id = ?
+// WHERE 
+//     p.is_active = 1
+//     AND p.product_cat = ?
+//     AND p.vendor_id = ?`,
+//       [userId,categoryId, vendorId]
+//     );
+
+//     // Step 3: Group products by category_name
+//     const groupedProducts = {};
+
+//     products.forEach(row => {
+//       const category = row.category_name || 'others';
+//       const product = {
+//         id: row.pid,
+//         name: row.product_name,
+//         price: parseFloat(row.price),
+//         mrp: parseFloat(row.mrp_price),
+//         image: row.product_image,
+//         discount: Math.round(((parseFloat(row.mrp_price) - parseFloat(row.price)) / parseFloat(row.mrp_price)) * 100),
+//         rating: row.rating,
+//         reviews: row.reviews,
+//         is_wishlist: row.is_wishlist,
+//         category:row.category_name,
+//         subcategoryid:row.cid
+//       };
+
+//       if (!groupedProducts[category]) {
+//         groupedProducts[category] = [];
+//       }
+//       groupedProducts[category].push(product);
+//     });
+
+//     // Final Response
+//     return res.status(200).json({
+//       status: true,
+//       categories: totalCategories,
+//       productsData: groupedProducts
+//     });
+
+//   } catch (error) {
+//     console.error('Get Product Error:', error);
+//     return res.status(500).json({
+//       status: false,
+//       message: 'Server error while fetching products'
+//     });
+//   }
+// };
 
 export const getProduct = async (req, res) => {
   try {
-    const { categoryId, vendorId,userId } = req.query;
+    const { categoryId, vendorId, userId } = req.query;
 
     if (!categoryId || !vendorId || !userId) {
       return res.status(400).json({
         status: false,
-        message: 'category_id and vendor_id are required'
+        message: "category_id and vendor_id are required",
       });
     }
 
@@ -24,11 +132,11 @@ export const getProduct = async (req, res) => {
     // Optional: Add "All" or static categories
     const categorylst = [
       {
-        id: 'all',
+        id: "all",
         parent_id: categoryId,
-        name: 'All',
-        icon: '' // or a default image URL
-      }
+        name: "All",
+        icon: "", // default image
+      },
     ];
 
     const totalCategories = [...categorylst, ...subcategories];
@@ -36,82 +144,82 @@ export const getProduct = async (req, res) => {
     // Step 2: Get products with subcategory names
     const [products] = await con.query(
       `SELECT 
-    p.*,
-    c.cid,
-    c.category_name,
-    CASE WHEN w.product_id IS NOT NULL THEN 1 ELSE 0 END AS is_wishlist
-FROM 
-    hr_product p
-JOIN 
-    hr_category c 
-    ON p.product_sub_cat = c.cid
-LEFT JOIN 
-    hr_wishlist_product w
-    ON w.product_id = p.pid AND w.user_id = ?
-WHERE 
-    p.is_active = 1
-    AND p.product_cat = ?
-    AND p.vendor_id = ?`,
-      [userId,categoryId, vendorId]
+        p.*,
+        c.cid,
+        c.category_name,
+        CASE WHEN w.product_id IS NOT NULL THEN 1 ELSE 0 END AS is_wishlist
+      FROM hr_product p
+      JOIN hr_category c ON p.product_sub_cat = c.cid
+      LEFT JOIN hr_wishlist_product w
+        ON w.product_id = p.pid AND w.user_id = ?
+      WHERE 
+        p.is_active = 1
+        AND p.product_cat = ?
+        AND p.vendor_id = ?`,
+      [userId, categoryId, vendorId]
     );
 
     // Step 3: Group products by category_name
     const groupedProducts = {};
-    products.forEach(row => {
-      const category = row.category_name || 'others';
-      const product = {
-        id: row.pid,
-        name: row.product_name,
-        price: parseFloat(row.price),
-        mrp: parseFloat(row.mrp_price),
-        image: row.product_image,
-        discount: Math.round(((parseFloat(row.mrp_price) - parseFloat(row.price)) / parseFloat(row.mrp_price)) * 100),
-        rating: row.rating,
-        reviews: row.reviews,
-        is_wishlist: row.is_wishlist,
-        category:row.category_name,
-        subcategoryid:row.cid
-      };
 
-      if (!groupedProducts[category]) {
-        groupedProducts[category] = [];
-      }
-      groupedProducts[category].push(product);
-    });
+    // Use Promise.all so all images are signed in parallel
+    await Promise.all(
+      products.map(async (row) => {
+        const signedImageUrl = await getImageUrl(row.product_image);
+
+        const category = row.category_name || "others";
+        const product = {
+          id: row.pid,
+          name: row.product_name,
+          price: parseFloat(row.price),
+          mrp: parseFloat(row.mrp_price),
+          image: signedImageUrl, // ✅ send signed image
+          discount: Math.round(
+            ((parseFloat(row.mrp_price) - parseFloat(row.price)) /
+              parseFloat(row.mrp_price)) *
+              100
+          ),
+          rating: row.rating,
+          reviews: row.reviews,
+          is_wishlist: row.is_wishlist,
+          category: row.category_name,
+          subcategoryid: row.cid,
+        };
+
+        if (!groupedProducts[category]) {
+          groupedProducts[category] = [];
+        }
+        groupedProducts[category].push(product);
+      })
+    );
 
     // Final Response
     return res.status(200).json({
       status: true,
       categories: totalCategories,
-      productsData: groupedProducts
+      productsData: groupedProducts,
     });
-
   } catch (error) {
-    console.error('Get Product Error:', error);
+    console.error("Get Product Error:", error);
     return res.status(500).json({
       status: false,
-      message: 'Server error while fetching products'
+      message: "Server error while fetching products",
     });
   }
 };
 
-
-
 export const postProductOrder = async (req, res) => {
   let connection;
   try {
-    const { productid, categoryid, quantity, userid } = req.body; // ✅ Changed from req.query to req.body
-
-    // Validate & convert quantity
+    const { productid, categoryid, quantity, userid } = req.body; 
+    
     const qty = parseInt(quantity, 10);
     if (!productid || !categoryid || !userid || isNaN(qty)) {
       return res.status(400).json({ status: "error", message: "Invalid parameters" });
     }
-
-    // Get DB connection
+   
     connection = await con.getConnection();
-
-    // 1️⃣ Check if product already exists in cart
+    
     const [cartRows] = await connection.query(
       "SELECT * FROM `hr_cart_order_item` WHERE `parent_categor_id`=? AND `user_id`=? AND `product_id`=?",
       [categoryid, userid, productid]
@@ -189,7 +297,7 @@ export const postProductOrder = async (req, res) => {
   // Get Cart Summary
 export const getCartSummary = async (req, res) => {
   try {
-    const { userid,categoryId,vendorId } = req.query; // or req.params depending on your route
+    const { userid,categoryId,vendorId } = req.query; 
     if (!userid) {
       return res.status(400).json({
         status: false,
@@ -219,10 +327,9 @@ export const getCartSummary = async (req, res) => {
       (sum, item) => sum + item.price * item.quantity,
       0
     );
-
-    // Get recent images (last 2 added)
+   
     const recentImages = cartItems
-      .slice(-2) // last 2 items
+      .slice(-2) 
       .map((item) => item.product_image || 'https://atscortex.com/deligo/client/uploads/product.png');
 
     return res.json({
