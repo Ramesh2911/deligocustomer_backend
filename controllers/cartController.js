@@ -1,4 +1,19 @@
 import con from '../db/db.js';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3 } from "../config/awsConfig.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+
+async function getImageUrl(key) {
+  if (!key) return null;
+  const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
+
+  const command = new GetObjectCommand({
+    Bucket: "deligo.image",
+    Key: cleanedKey, 
+  });
+
+  return await getSignedUrl(s3, command, { expiresIn: 3600 });
+}
 
 // Utility: Haversine formula (distance in km)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -73,7 +88,7 @@ export const getMyCart = async (req, res) => {
     // 4. Group by vendor
     const byVendor = new Map();
 
-    for (const r of rows) {
+    for await (const r of rows) {
       // calculate vendor distance
       let distance = null;
       let deliveryTime = null;
@@ -106,7 +121,7 @@ export const getMyCart = async (req, res) => {
       byVendor.get(r.vendor_id).items.push({
         id: String(r.product_id),
         name: r.product_name,
-        image: r.product_image || null,
+        image: await getImageUrl(r.product_image) || null,
         price: Number(r.price),
         mrp: Number(r.mrp ?? r.price),
         quantity: Number(r.quantity),

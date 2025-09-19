@@ -1,4 +1,19 @@
 import con from '../db/db.js';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3 } from "../config/awsConfig.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+
+async function getImageUrl(key) {
+  if (!key) return null;
+  const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
+
+  const command = new GetObjectCommand({
+    Bucket: "deligo.image",
+    Key: cleanedKey, 
+  });
+
+  return await getSignedUrl(s3, command, { expiresIn: 3600 });
+}
 
 export const getCheckout = async (req, res) => {
   try {
@@ -30,6 +45,12 @@ export const getCheckout = async (req, res) => {
       [userid, categoryId, vendorId]
     );
 
+    // Process product images to get signed URLs
+    const processedRows = await Promise.all(rows.map(async (row) => ({
+      ...row,
+      product_image: await getImageUrl(row.product_image)
+    })));
+
     // Calculate subtotal
     const subtotal = rows.reduce(
       (acc, item) => acc + parseFloat(item.total_amount || 0),
@@ -43,7 +64,7 @@ export const getCheckout = async (req, res) => {
 
     return res.status(200).json({
       status: "success",
-      poductlist: rows,
+      poductlist: processedRows,
       subtotal: subtotal.toFixed(2),
       deliveryfee: deliveryfee.toFixed(2),
       totalamount: totalamount.toFixed(2),
@@ -57,7 +78,6 @@ export const getCheckout = async (req, res) => {
     });
   }
 };
-
 
 export const getCheckoutUpdate = async (req, res) => {
   let connection;
@@ -147,6 +167,12 @@ export const getCheckoutUpdate = async (req, res) => {
          AND hr_product.vendor_id = ?`,
       [userid, categoryid, vendorId]
     );
+
+    // Process product images to get signed URLs
+    const processedRows = await Promise.all(rows.map(async (row) => ({
+      ...row,
+      product_image: await getImageUrl(row.product_image)
+    })));
 
     // Calculate subtotal
     const subtotal = rows.reduce(
