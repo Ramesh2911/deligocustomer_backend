@@ -19,7 +19,7 @@ export const paymentSheet = async (req, res) => {
 
     // ✅ Sum total_amount from cart
     const [cartSumRows] = await con.execute(
-      'SELECT SUM(total_amount) AS ptval, vendor_id FROM hr_cart_order_item WHERE parent_categor_id = ? AND vendor_id = ? AND user_id = ?',
+      'SELECT SUM(total_amount) AS ptval FROM hr_cart_order_item WHERE parent_categor_id = ? AND vendor_id = ? AND user_id = ?',
       [categoryId, vendorId, userid]
     );
 
@@ -57,8 +57,8 @@ export const paymentSheet = async (req, res) => {
 
  // ✅ 4. Insert order items (convert PHP loop to Node.js)
     const [cartItems] = await con.execute(
-      'SELECT * FROM hr_cart_order_item WHERE parent_categor_id = ? AND user_id = ?',
-      [categoryId, userid]
+      'SELECT * FROM hr_cart_order_item WHERE parent_categor_id = ? AND user_id = ? AND vendor_id = ?',
+      [categoryId, userid, vendorId]
     );
 
     for (const item of cartItems) {
