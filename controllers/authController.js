@@ -210,3 +210,48 @@ export const createuser = async (req, res) => {
     return res.json(response);
   }
 };
+
+//==== change password====
+export const changePassword = async (req, res) => {
+  try {
+    const { id, old_password, confirm_password } = req.body;
+
+    if (!id || !old_password || !confirm_password) {
+      return res.status(400).json({ status: false, message: "All fields are required" });
+    }
+
+    // 1. Get user by ID
+    const [rows] = await con.query(
+      "SELECT password FROM hr_users WHERE id = ?",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const hashedPassword = rows[0].password;
+
+    // 2. Compare old password
+    const isMatch = await bcrypt.compare(old_password, hashedPassword);
+    if (!isMatch) {
+      return res.status(400).json({ status: false, message: "Old password is incorrect" });
+    }
+
+    // 3. Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const newHashedPassword = await bcrypt.hash(confirm_password, salt);
+
+    // 4. Update password in DB
+    await con.query(
+      "UPDATE hr_users SET password = ? WHERE id = ?",
+      [newHashedPassword, id]
+    );
+
+    return res.status(200).json({ status: true, message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Change Password Error:", error);
+    return res.status(500).json({ status: false, message: "Internal server error" });
+  }
+};
+
