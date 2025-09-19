@@ -1,5 +1,21 @@
 import con from '../db/db.js';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { s3 } from "../config/awsConfig.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 
+async function getImageUrl(key) {
+  if (!key) return null;
+  const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
+
+  const command = new GetObjectCommand({
+    Bucket: "deligo.image",
+    Key: cleanedKey, 
+  });
+
+  return await getSignedUrl(s3, command, { expiresIn: 3600 });
+}
+
+//=====New order=====
 export const postOrder = async (req, res) => {
   try {
     const { userid, paymentmethod, catid, vendorid } = req.body;
@@ -92,13 +108,11 @@ export const postOrder = async (req, res) => {
   }
 };
 
-
-
+//=== order list by customer====
 export const getOrders = async (req, res) => {
   try {
     const { userid } = req.query;
-
-    // Helper function to fetch orders by status condition
+  
     const fetchOrders = async (statusCondition) => {
       const [rows] = await con.query(`
         SELECT 
@@ -125,10 +139,10 @@ export const getOrders = async (req, res) => {
         ORDER BY o.oid DESC
       `, [userid]);
 
-      return rows.map(order => ({
+      return Promise.all(rows.map(async order => ({
         id: String(order.oid),
         restaurantName: order.restaurantName,
-        restaurantImage: order.restaurantImage,
+        restaurantImage: await getImageUrl(order.restaurantImage),
         orderItems: order.orderItems ? order.orderItems.split('||').map(item => item.trim()) : [],
         totalAmount: Number(order.totalAmount),
         status: order.status.toLowerCase(),
@@ -137,12 +151,15 @@ export const getOrders = async (req, res) => {
         rating: null,
         deliveryAddress: order.deliveryAddress,
         restaurantMobileNo: order.restaurantCCode+order.restaurantCMobile        
-      }));
+      })));
     };
 
     // Fetch both sets of orders
-    const activeOrders = await fetchOrders('o.status < 4');
-    const completedOrders = await fetchOrders('o.status > 3');
+    // Fetch and process both sets of orders
+    const [activeOrders, completedOrders] = await Promise.all([
+      fetchOrders('o.status < 4'),
+      fetchOrders('o.status > 3')
+    ]);
 
     // Send both in one response
     res.json({
