@@ -1,4 +1,5 @@
 import con from '../db/db.js';
+
 export const getAddress = async (req, res) => {
   try {
         const { userId } = req.query;
@@ -157,24 +158,17 @@ export const addAddress = async (req, res) => {
   }
 };
 
-
-
 //====updateAddress=====
 export const updateAddress = async (req, res) => {
    try {
-      const authHeader = req.headers.authorization;
+      const { user_id, id } = req.params;
 
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-         return res.status(401).json({
+      if (!user_id || !id) {
+         return res.status(400).json({
             status: false,
-            message: 'Authorization token missing or invalid',
+            message: 'user_id and id are required parameters',
          });
       }
-
-      const token = authHeader.split(' ')[1];
-      jwt.verify(token, 'deligo@JWT!9dKz');
-
-      const { user_id, id } = req.params;
 
       await con.query(
          `UPDATE hr_addresses SET is_active = 0 WHERE user_id = ?`,
