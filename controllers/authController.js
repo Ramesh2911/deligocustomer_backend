@@ -259,79 +259,76 @@ export const changePassword = async (req, res) => {
 
 //=====forgotPassword====
 export const sendResetOtp = async (req, res) => {
-  const { email, phone } = req.body;
-
-  if (!email && !phone) {
-    return res.status(400).json({ status: false, message: 'Email or phone is required' });
-  }
-
   try {
-    let query = '';
-    let value = '';
-    if (email) {
-      query = 'SELECT * FROM hr_users WHERE email = ?';
-      value = email;
-    } else {
-      query = 'SELECT * FROM hr_users WHERE phone = ?';
-      value = phone;
+    const { email } = req.body;
+
+    if (!email) {
+      return res.json({
+        status: false,
+        message: 'Email is required'
+      });
     }
 
-    const [result] = await con.query(query, [value]);
+    // Check if user exists
+    const [userResult] = await con.query(
+      'SELECT id FROM hr_users WHERE email = ? AND is_active = "Y"',
+      [email]
+    );
 
-    if (result.length === 0) {
-      return res.status(404).json({ status: false, message: 'User not found' });
+    if (userResult.length === 0) {
+      return res.json({
+        status: false,
+        message: 'User not found with this email'
+      });
     }
 
     const otp = generateOTP();
 
-    if (email) {
-      const transporter = nodemailer.createTransport({
-        host: process.env.MAILER_HOST,
-        port: Number(process.env.MAILER_PORT),
-        secure: false,
-        auth: {
-          user: process.env.MAILER_USER,
-          pass: process.env.MAILER_PASSWORD,
-        },
-        tls: {
-          ciphers: 'SSLv3',
-          rejectUnauthorized: false,
-        },
-      });
+    // Create nodemailer transporter
+    const transporter = nodemailer.createTransport({
+      host: "smtp-relay.brevo.com",
+      port: 587,
+      auth: {
+        user: process.env.BREVO_USER,
+        pass: process.env.BREVO_PASSWORD
+      }
+    });
 
-      const mailOptions = {
-        from: `"${process.env.MAILER_SENDER_NAME}" <${process.env.MAILER_USER}>`,
-        to: email,
-        subject: 'Password Reset OTP',
-        text: `Your OTP for password reset is: ${otp}`,
-      };
+    const mailOptions = {
+      from: process.env.GMAIL_USER,
+      to: email,
+      subject: 'Password Reset OTP',
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>Password Reset OTP</h2>
+          <p>Your OTP for password reset is: <strong>${otp}</strong></p>
+          <p>This OTP will expire in 10 minutes.</p>
+          <p>If you didn't request this, please ignore this email.</p>
+        </div>
+      `
+    };
 
-      await transporter.sendMail(mailOptions);
+    // Send email
+    await transporter.sendMail(mailOptions);
 
-      await con.query(
-        'INSERT INTO hr_mail_otp (mail, otp, create_time) VALUES (?, ?, NOW())',
-        [email, otp]
-      );
-    }
+    // Save OTP in database
+    await con.query(
+      'INSERT INTO hr_mail_otp (mail, otp, create_time) VALUES (?, ?, NOW())',
+      [email, otp]
+    );
 
-    if (phone) {
-      await client.messages.create({
-        body: `Your OTP for password reset is: ${otp}`,
-        from: process.env.TWILIO_PHONE_NUMBER,
-        to: phone.startsWith('+') ? phone : `+91${phone}`,
-      });
-
-      // Optional: Insert into phone OTP table here
-    }
-
-    return res.status(200).json({
+    return res.json({
       status: true,
-      message: 'OTP sent successfully',
+      message: 'OTP sent successfully'
     });
 
   } catch (error) {
     console.error('Error in sendResetOtp:', error);
-    return res.status(500).json({ status: false, message: 'Internal server error' });
+    return res.json({ 
+      status: false, 
+      message: 'Failed to send OTP email. Please try again later.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

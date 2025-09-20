@@ -173,11 +173,166 @@ export const getOrders = async (req, res) => {
   }
 };
 
+// export const getOrderWithItems = async (req, res) => {
+//   try {
+//     const { orderId } = req.query;
+//     if (!orderId) {
+//       return res.status(400).json({ error: "orderId is required" });
+//     }
+
+//     const sql = `
+//      SELECT 
+//     o.oid AS order_id,
+//     o.user_id,
+//     o.vendor_id,
+//     o.product_amount,
+//     o.delivery_amount,
+//     o.discount AS order_discount,
+//     o.tax_amount AS order_tax,
+//     o.total_amount AS order_total,
+//     o.payment_method,
+//     o.full_name,
+//     o.mobile,
+//     o.shipping_address,
+//     o.billing_address,
+//     o.status AS order_status,
+//     o.notes,
+//     o.created_time,
+
+//     -- Delivery details
+//     d.id AS delivery_id,
+//     d.rating AS delivery_rating,
+//     d.first_name AS delivery_name,
+//     d.mobile AS delivery_mobile,
+//     d.profile_picture AS delivery_profile_picture,
+
+//     -- Order items
+//     i.oiid AS item_id,
+//     i.product_id,
+//     i.product_name,
+//     i.sku,
+//     i.quantity,
+//     i.unit_price,
+//     i.discount AS item_discount,
+//     i.total_price,
+//     i.tax_amount AS item_tax,
+//     i.total_amount AS item_total,
+//     i.status AS item_status,
+//     p.product_image,   
+
+//     -- User active address
+//     a.lat AS user_latitude,
+//     a.lng AS user_longitude,
+
+//     -- Vendor details
+//     v.business_name,
+//     v.company_name,
+//     v.shop_logo,
+//     v.latitude AS vendor_latitude,
+//     v.longitude AS vendor_longitude
+
+// FROM hr_order o
+// LEFT JOIN hr_order_item i 
+//     ON o.oid = i.order_id
+// LEFT JOIN hr_product p               
+// -- ✅ join product table
+//     ON p.pid = i.product_id
+// LEFT JOIN hr_users d
+//     ON o.delivery_id = d.id
+// LEFT JOIN hr_addresses a
+//     ON a.user_id = o.user_id AND a.is_active = 1
+// LEFT JOIN hr_users v
+//     ON v.id = o.vendor_id
+// WHERE o.oid = ? `;
+
+//    // console.log("Executing SQL:", sql, "with orderId:", orderId);
+
+//     const [results] = await con.query(sql, [orderId]);
+
+//     if (!results || results.length === 0) {
+//       console.warn("⚠️ No order found for ID:", orderId);
+//       return res.status(404).json({ message: "Order not found" });
+//     }
+
+//      // Build order object
+//     const OrderDetails = {
+//       status:true,
+//       orderId: results[0].order_id,
+//       user_id: results[0].user_id,
+//       vendor_id: results[0].vendor_id,
+//       product_amount: Number(results[0].product_amount),
+//       delivery_amount: Number(results[0].delivery_amount),
+//       discount: Number(results[0].order_discount),
+//       tax_amount: Number(results[0].order_tax),
+//       total_amount: Number(results[0].order_total),
+//       payment_method: results[0].payment_method,
+//       full_name: results[0].full_name,
+//       mobile: results[0].mobile,
+//       shipping_address: results[0].shipping_address,
+//       billing_address: results[0].billing_address,
+//       deliverystatus: results[0].order_status,
+//       notes: results[0].notes,
+//       created_time: results[0].created_time,
+
+//       deliveryPartner: results[0].delivery_id
+//         ? {
+//             id: results[0].delivery_id,
+//             name: results[0].delivery_name,
+//             rating: results[0].delivery_rating,
+//             phone: results[0].delivery_mobile,
+//             image: results[0].delivery_profile_picture,
+//           }
+//         : null,
+
+//       user_latitude: Number(results[0].user_latitude),
+//       user_longitude: Number(results[0].user_longitude),
+
+//       storeName: results[0].business_name,
+//       vendor_company_name: results[0].company_name,
+//       vendor_latitude: Number(results[0].vendor_latitude),
+//       vendor_longitude: Number(results[0].vendor_longitude),
+//       storeImage: results[0].shop_logo,
+
+//       deliverystatus: "delivered", 
+//       estimatedTime: "8 minutes",
+
+//       payment: {
+//         subtotal: Number(results[0].product_amount),
+//         deliveryFee: Number(results[0].delivery_amount),
+//         tax: Number(results[0].order_tax),
+//         total: Number(results[0].order_total),
+//       },
+
+//       items: results
+//         .filter((row) => row.item_id) // only valid rows with items
+//         .map((row) => ({
+//           //id: row.item_id,
+//           id: row.product_id,
+//           name: row.product_name,
+//           image: row.product_image,
+//           quantity: Number(row.quantity),
+//           price: Number(row.total_price),
+//           //discount: Number(row.item_discount),
+//          // total_price: Number(row.total_price),
+//          // tax_amount: Number(row.item_tax),
+//          // total_amount: Number(row.item_total),
+//          // status: row.item_status,
+//         })),
+//     };
+
+//     //console.log("✅ Final Order Object:", JSON.stringify(OrderDetails, null, 2));
+//     res.json(OrderDetails);
+
+//   } catch (error) {
+//     console.error("❌ Unexpected Error:", error);
+//     res.status(500).json({ error: "Something went wrong" });
+//   }
+// };
+
+
 export const getOrderWithItems = async (req, res) => {
   try {
     const { orderId } = req.query;
-    console.log("API Called with orderId:", orderId);
-
     if (!orderId) {
       return res.status(400).json({ error: "orderId is required" });
     }
@@ -237,7 +392,6 @@ FROM hr_order o
 LEFT JOIN hr_order_item i 
     ON o.oid = i.order_id
 LEFT JOIN hr_product p               
--- ✅ join product table
     ON p.pid = i.product_id
 LEFT JOIN hr_users d
     ON o.delivery_id = d.id
@@ -247,84 +401,76 @@ LEFT JOIN hr_users v
     ON v.id = o.vendor_id
 WHERE o.oid = ? `;
 
-   // console.log("Executing SQL:", sql, "with orderId:", orderId);
-
     const [results] = await con.query(sql, [orderId]);
 
     if (!results || results.length === 0) {
-      console.warn("⚠️ No order found for ID:", orderId);
       return res.status(404).json({ message: "Order not found" });
     }
 
-     // Build order object
-    const OrderDetails = {
-      status:true,
-      orderId: results[0].order_id,
-      user_id: results[0].user_id,
-      vendor_id: results[0].vendor_id,
-      product_amount: Number(results[0].product_amount),
-      delivery_amount: Number(results[0].delivery_amount),
-      discount: Number(results[0].order_discount),
-      tax_amount: Number(results[0].order_tax),
-      total_amount: Number(results[0].order_total),
-      payment_method: results[0].payment_method,
-      full_name: results[0].full_name,
-      mobile: results[0].mobile,
-      shipping_address: results[0].shipping_address,
-      billing_address: results[0].billing_address,
-      deliverystatus: results[0].order_status,
-      notes: results[0].notes,
-      created_time: results[0].created_time,
+    const firstRow = results[0];
 
-      deliveryPartner: results[0].delivery_id
+    const OrderDetails = {
+      status: true,
+      orderId: firstRow.order_id,
+      user_id: firstRow.user_id,
+      vendor_id: firstRow.vendor_id,
+      product_amount: Number(firstRow.product_amount),
+      delivery_amount: Number(firstRow.delivery_amount),
+      discount: Number(firstRow.order_discount),
+      tax_amount: Number(firstRow.order_tax),
+      total_amount: Number(firstRow.order_total),
+      payment_method: firstRow.payment_method,
+      full_name: firstRow.full_name,
+      mobile: firstRow.mobile,
+      shipping_address: firstRow.shipping_address,
+      billing_address: firstRow.billing_address,
+      deliverystatus: firstRow.order_status,
+      notes: firstRow.notes,
+      created_time: firstRow.created_time,
+
+      deliveryPartner: firstRow.delivery_id
         ? {
-            id: results[0].delivery_id,
-            name: results[0].delivery_name,
-            rating: results[0].delivery_rating,
-            phone: results[0].delivery_mobile,
-            image: results[0].delivery_profile_picture,
+            id: firstRow.delivery_id,
+            name: firstRow.delivery_name,
+            rating: firstRow.delivery_rating,
+            phone: firstRow.delivery_mobile,
+            image: await getImageUrl(firstRow.delivery_profile_picture),
           }
         : null,
 
-      user_latitude: Number(results[0].user_latitude),
-      user_longitude: Number(results[0].user_longitude),
+      user_latitude: Number(firstRow.user_latitude),
+      user_longitude: Number(firstRow.user_longitude),
 
-      storeName: results[0].business_name,
-      vendor_company_name: results[0].company_name,
-      vendor_latitude: Number(results[0].vendor_latitude),
-      vendor_longitude: Number(results[0].vendor_longitude),
-      storeImage: results[0].shop_logo,
+      storeName: firstRow.business_name,
+      vendor_company_name: firstRow.company_name,
+      vendor_latitude: Number(firstRow.vendor_latitude),
+      vendor_longitude: Number(firstRow.vendor_longitude),
+      storeImage: await getImageUrl(firstRow.shop_logo),
 
-      deliverystatus: "delivered", // 👈 keeping as delivered for demo rating
+      deliverystatus: "delivered", // demo only
       estimatedTime: "8 minutes",
 
       payment: {
-        subtotal: Number(results[0].product_amount),
-        deliveryFee: Number(results[0].delivery_amount),
-        tax: Number(results[0].order_tax),
-        total: Number(results[0].order_total),
+        subtotal: Number(firstRow.product_amount),
+        deliveryFee: Number(firstRow.delivery_amount),
+        tax: Number(firstRow.order_tax),
+        total: Number(firstRow.order_total),
       },
 
-      items: results
-        .filter((row) => row.item_id) // only valid rows with items
-        .map((row) => ({
-          //id: row.item_id,
-          id: row.product_id,
-          name: row.product_name,
-          image: row.product_image,
-          quantity: Number(row.quantity),
-          price: Number(row.total_price),
-          //discount: Number(row.item_discount),
-         // total_price: Number(row.total_price),
-         // tax_amount: Number(row.item_tax),
-         // total_amount: Number(row.item_total),
-         // status: row.item_status,
-        })),
+      items: await Promise.all(
+        results
+          .filter((row) => row.item_id)
+          .map(async (row) => ({
+            id: row.product_id,
+            name: row.product_name,
+            image: await getImageUrl(row.product_image),
+            quantity: Number(row.quantity),
+            price: Number(row.total_price),
+          }))
+      ),
     };
 
-    //console.log("✅ Final Order Object:", JSON.stringify(OrderDetails, null, 2));
     res.json(OrderDetails);
-
   } catch (error) {
     console.error("❌ Unexpected Error:", error);
     res.status(500).json({ error: "Something went wrong" });
