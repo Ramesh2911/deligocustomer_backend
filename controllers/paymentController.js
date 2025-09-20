@@ -49,7 +49,7 @@ export const paymentSheet = async (req, res) => {
         address.lng,
         address.house,
         address.house,
-        "pending", // initial state
+        "completed", // initial state
       ]
     );
 
@@ -114,7 +114,7 @@ export const paymentSheet = async (req, res) => {
         customer.id,
         paymentIntent.id,
         paymentIntent.payment_method ?? null, // will be null until confirmation
-        "pending",
+        "completed",
         orderId
       ]
     );
