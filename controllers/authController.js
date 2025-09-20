@@ -8,6 +8,7 @@ import nodemailer from 'nodemailer';
 dotenv.config();
 
 const upload = multer({ storage: multer.memoryStorage() });
+const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 // ===== LOGIN =====
 export const login = async (req, res) => {
