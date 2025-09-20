@@ -161,12 +161,13 @@ export const addAddress = async (req, res) => {
 //====updateAddress=====
 export const updateAddress = async (req, res) => {
    try {
-      const { user_id, id } = req.params;
+      const user_id = req.query.user_id;
+      const id = req.query.id;
 
       if (!user_id || !id) {
-         return res.status(400).json({
+         return res.json({
             status: false,
-            message: 'user_id and id are required parameters',
+            message: "user_id and id are required parameters"
          });
       }
 
@@ -180,15 +181,15 @@ export const updateAddress = async (req, res) => {
          [id]
       );
 
-      return res.status(200).json({
+      return res.json({
          status: true,
-         message: 'Address updated successfully',
+         message: "Address updated successfully"
       });
    } catch (error) {
       console.error('Update Address Error:', error.message);
-      return res.status(500).json({
+      return res.json({
          status: false,
-         message: 'Server error or invalid token',
+         message: "Server error"
       });
    }
 };

@@ -8,6 +8,6 @@ import {
 
 const addressRoutes = express.Router();
 addressRoutes.get('/getaddress', getAddress);
-addressRoutes.post('/updateaddress',verifyToken, updateAddress);
+addressRoutes.post('/updateaddress', updateAddress);
 addressRoutes.post('/addaddress', addAddress);
 export default addressRoutes;
