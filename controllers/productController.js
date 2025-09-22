@@ -221,7 +221,7 @@ export const postProductOrder = async (req, res) => {
     connection = await con.getConnection();
     
     const [cartRows] = await connection.query(
-      "SELECT * FROM `hr_cart_order_item` WHERE `parent_categor_id`=? AND `user_id`=? AND `product_id`=?",
+      "SELECT * FROM hr_cart_order_item WHERE parent_categor_id=? AND user_id=? AND product_id=?",
       [categoryid, userid, productid]
     );
 
@@ -232,20 +232,20 @@ export const postProductOrder = async (req, res) => {
       if (qty > 0) {
         // Update quantity
         await connection.query(
-          "UPDATE `hr_cart_order_item` SET `quantity`=?, `total_amount`=? WHERE `coid`=?",
-          [qty, totalPrice, product.coid]
+          "UPDATE hr_cart_order_item SET quantity=? WHERE coid=?",
+          [qty, product.coid]
         );
       } else {
         // Remove item if quantity is 0
         await connection.query(
-          "DELETE FROM `hr_cart_order_item` WHERE `coid`=?",
+          "DELETE FROM hr_cart_order_item WHERE coid=?",
           [product.coid]
         );
       }
     } else {
       // 2️⃣ Product not in cart → fetch product details
       const [prodRows] = await connection.query(
-        "SELECT * FROM `hr_product` WHERE `pid`=?",
+        "SELECT * FROM hr_product WHERE pid=?",
         [productid]
       );
 
@@ -255,19 +255,13 @@ export const postProductOrder = async (req, res) => {
 
         await connection.query(
           `INSERT INTO hr_cart_order_item 
-          (user_id, parent_categor_id, product_id, product_name, sku, quantity, unit_price, total_price, tax_amount, total_amount, vendor_id) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (user_id, parent_categor_id, product_id,  quantity,   vendor_id) 
+          VALUES (?, ?, ?, ?, ?)`,
           [
             userid,
             categoryid,
-            prod.pid,
-            prod.product_name,
-            prod.sku,
-            qty,
-            prod.price,
-            totalPrice, // total_price
-            0,          // tax_amount
-            totalPrice, // total_amount
+            prod.pid,            
+            qty,           
             prod.vendor_id,
           ]
         );

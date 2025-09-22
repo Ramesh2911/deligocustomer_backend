@@ -20,28 +20,38 @@ export const postOrder = async (req, res) => {
   try {
     const { userid, paymentmethod, catid, vendorid } = req.body;
 
-    // Fetch active address for user
+    // 1. Fetch active address for user
     const [addressRows] = await con.execute(
       'SELECT * FROM hr_addresses WHERE user_id = ? AND is_active = 1',
       [userid]
     );
-    //console.log('addressRows Result:', addressRows);
+
     if (addressRows.length === 0) {
       return res.status(404).json({ status: 'error', message: 'No active address found for user' });
     }
     const address = addressRows[0];
 
-    // Sum total_amount and get vendor_id from cart order item for user, vendor and category
+    // 2. Sum total_amount from cart
     const [cartSumRows] = await con.execute(
-      'SELECT SUM(total_amount) AS ptval, vendor_id FROM hr_cart_order_item WHERE parent_categor_id = ? AND vendor_id = ? AND user_id = ?',
+      `SELECT hcoi.vendor_id, hcoi.quantity, hp.price 
+       FROM hr_cart_order_item hcoi
+       LEFT JOIN hr_product hp ON hp.pid = hcoi.product_id
+       WHERE hcoi.parent_categor_id = ? 
+         AND hcoi.vendor_id = ? 
+         AND hcoi.user_id = ?`,
       [catid, vendorid, userid]
     );
 
-    const ptval = parseFloat(cartSumRows[0].ptval) || 0;
-    const deliveryfee = 2.0;
+    if (cartSumRows.length === 0) {
+      return res.status(400).json({ status: 'error', message: 'No items found in cart' });
+    }
+
+    // Calculate product total
+    const ptval = cartSumRows.reduce((acc, row) => acc + (row.quantity * row.price), 0);
+    const deliveryfee = 2.0; // TODO: dynamic per vendor/config
     const totalAmount = ptval + deliveryfee;
 
-    // Insert into hr_order
+    // 3. Insert into hr_order
     const [orderResult] = await con.execute(
       `INSERT INTO hr_order (
         user_id, vendor_id, product_amount, delivery_amount, discount, tax_amount, total_amount,
@@ -50,11 +60,11 @@ export const postOrder = async (req, res) => {
       [
         userid,
         vendorid,
-        ptval.toFixed(2),
-        deliveryfee.toFixed(2),
-        '0.00',
-        '0.00',
-        totalAmount.toFixed(2),
+        Number(ptval.toFixed(2)),
+        Number(deliveryfee.toFixed(2)),
+        0.00, // discount
+        0.00, // tax_amount (order-level, can recalc later)
+        Number(totalAmount.toFixed(2)),
         paymentmethod || 1,
         address.full_name,
         address.mobile,
@@ -64,44 +74,59 @@ export const postOrder = async (req, res) => {
         address.house,
       ]
     );
-//console.log("orderResult---",orderResult);
+
     const lastInsertId = orderResult.insertId;
 
-    // Get cart items for that user, vendor and category
+    // 4. Get cart items with product details (added hp.tax_price)
     const [cartItems] = await con.execute(
-      'SELECT * FROM hr_cart_order_item WHERE parent_categor_id = ? AND vendor_id = ? AND user_id = ?',
+      `SELECT hcoi.vendor_id, hcoi.product_id, hp.product_name, hp.sku, hp.discount,
+              hcoi.quantity, hp.price, hp.tax_price
+       FROM hr_cart_order_item hcoi
+       LEFT JOIN hr_product hp ON hp.pid = hcoi.product_id
+       WHERE hcoi.parent_categor_id = ? 
+         AND hcoi.vendor_id = ? 
+         AND hcoi.user_id = ?`,
       [catid, vendorid, userid]
     );
 
-    // Insert each item into hr_order_item
+    // 5. Insert each cart item into hr_order_item
     for (const item of cartItems) {
+      const unitPrice = Number(item.price) || 0;
+      const discount = Number(item.discount) || 0;
+      const taxRate = Number(item.tax_price) || 0;
+
+      const totalPrice = item.quantity * unitPrice;
+      const taxAmount = item.quantity * taxRate;
+      const totalAmountItem = totalPrice + taxAmount - discount;
+
       await con.execute(
         `INSERT INTO hr_order_item (
-          order_id, product_id, product_name, sku, quantity, unit_price, discount, total_price, tax_amount, total_amount, vendor_id
+          order_id, product_id, product_name, sku, quantity, unit_price, discount, 
+          total_price, tax_amount, total_amount, vendor_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           lastInsertId,
           item.product_id,
-          item.product_name,         
+          item.product_name,
           item.sku,
           item.quantity,
-          item.unit_price,
-          item.discount,
-          item.total_price,
-          item.tax_amount,
-          item.total_amount,
+          unitPrice,
+          discount,
+          totalPrice,
+          taxAmount,
+          totalAmountItem,
           item.vendor_id,
         ]
       );
     }
 
-    // Delete cart items after creating the order
+    // 6. Delete cart items after order is placed
     await con.execute(
       'DELETE FROM hr_cart_order_item WHERE parent_categor_id = ? AND vendor_id = ? AND user_id = ?',
       [catid, vendorid, userid]
     );
 
-    return res.json({ status: 'success', message: 'Product saved successfully!' });
+    return res.json({ status: 'success', message: 'Order placed successfully!', order_id: lastInsertId });
   } catch (error) {
     console.error('postOrder error:', error);
     return res.status(500).json({ status: 'error', message: error.message });

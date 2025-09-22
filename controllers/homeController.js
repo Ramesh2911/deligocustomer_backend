@@ -27,61 +27,63 @@ export const getCategory = async (req, res) => {
       });
     }
    
-const [rows] = await con.query(
-  `SELECT *
-   FROM (
-       SELECT 
-           inner_q.*,
-           ROW_NUMBER() OVER (
-               PARTITION BY inner_q.cid 
-               ORDER BY inner_q.distance_km ASC
-           ) AS rn
+    const [rows] = await con.query(
+      `SELECT *
        FROM (
            SELECT 
-               u.id,
-               u.business_type_id,        
-               u.business_name AS name,
-               u.company_name,
-               u.shop_banner AS image,
-               u.rating,
-               u.latitude AS store_lat,
-               u.longitude AS store_lng,
-               c.cid,
-               c.category_name,
-               a.lat AS user_lat,
-               a.lng AS user_lng,
-               (6371 * ACOS(
-                   COS(RADIANS(a.lat)) * COS(RADIANS(u.latitude)) *
-                   COS(RADIANS(u.longitude) - RADIANS(a.lng)) +
-                   SIN(RADIANS(a.lat)) * SIN(RADIANS(u.latitude))
-               )) AS distance_km,
-               CASE 
-                   WHEN w.store_id IS NOT NULL THEN 1 
-                   ELSE 0 
-               END AS is_wishlist
-           FROM hr_users u
-           JOIN hr_addresses a 
-               ON a.user_id = ?
-              AND a.is_active = 1
-           JOIN hr_category c 
-               ON c.cid = u.business_type_id 
-              AND c.is_active = 1
-           LEFT JOIN hr_wishlist_store w 
-               ON w.store_id = u.id 
-              AND w.user_id = ?
-           WHERE u.role_id = 4 
-             AND u.is_active = 'Y'
-       ) AS inner_q
-   ) AS sub
-   WHERE rn <= 5
-   ORDER BY cid, distance_km ASC`,
-  [userId, userId]
-);
+               inner_q.*,
+               ROW_NUMBER() OVER (
+                   PARTITION BY inner_q.cid 
+                   ORDER BY inner_q.distance_km ASC
+               ) AS rn
+           FROM (
+               SELECT 
+                   u.id,
+                   u.business_type_id,        
+                   u.business_name AS name,
+                   u.company_name,
+                   u.shop_banner AS image,
+                   u.rating,
+                   u.latitude AS store_lat,
+                   u.longitude AS store_lng,
+                   u.is_admin_verify,
+                   u.is_online,
+                   c.cid,
+                   c.category_name,
+                   a.lat AS user_lat,
+                   a.lng AS user_lng,
+                   (6371 * ACOS(
+                       COS(RADIANS(a.lat)) * COS(RADIANS(u.latitude)) *
+                       COS(RADIANS(u.longitude) - RADIANS(a.lng)) +
+                       SIN(RADIANS(a.lat)) * SIN(RADIANS(u.latitude))
+                   )) AS distance_km,
+                   CASE 
+                       WHEN w.store_id IS NOT NULL THEN 1 
+                       ELSE 0 
+                   END AS is_wishlist
+               FROM hr_users u
+               JOIN hr_addresses a 
+                   ON a.user_id = ?
+                  AND a.is_active = 1
+               JOIN hr_category c 
+                   ON c.cid = u.business_type_id 
+                  AND c.is_active = 1
+               LEFT JOIN hr_wishlist_store w 
+                   ON w.store_id = u.id 
+                  AND w.user_id = ?
+               WHERE u.role_id = 4 
+                 AND u.is_active = 'Y'
+           ) AS inner_q
+       ) AS sub
+       WHERE rn <= 5
+       ORDER BY cid, distance_km ASC`,
+      [userId, userId]
+    );
 
     const rowsWithImageUrls = await Promise.all(
       rows.map(async (row) => ({
         ...row,
-        image: await getImageUrl(row.image) 
+        image: await getImageUrl(row.image)
       }))
     );
 
@@ -107,3 +109,4 @@ const [rows] = await con.query(
     });
   }
 };
+
