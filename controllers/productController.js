@@ -343,4 +343,48 @@ export const getCartSummary = async (req, res) => {
   }
 };
 
+// Get Product Details
+export const getProductDetails = async (req, res) => {
+  const { productId } = req.query;
 
+  if (!productId) {
+    return res.status(400).json({
+      status: false,
+      message: "productId is required",
+    });
+  }
+
+  try {
+    const sql = `
+      SELECT pid, product_name, product_image, product_short, product_desc,
+             mrp_price, price, sku, brand, rating, rating_user, reviews, is_active
+      FROM hr_product
+      WHERE pid = ?;
+    `;
+
+    const [rows] = await con.query(sql, [productId]);
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "Product not found",
+      });
+    }
+
+    const product = rows[0];
+    
+    product.product_image = await getImageUrl(product.product_image);
+
+    return res.status(200).json({
+      status: true,
+      message: "Product details fetched successfully",
+      data: product,
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+    });
+  }
+};

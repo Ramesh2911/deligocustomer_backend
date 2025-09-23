@@ -54,8 +54,7 @@ export const paymentSheet = async (req, res) => {
     );
 
     const orderId = orderResult.insertId;
-
- // ✅ 4. Insert order items (convert PHP loop to Node.js)
+ 
     const [cartItems] = await con.execute(
       'SELECT * FROM hr_cart_order_item WHERE parent_categor_id = ? AND user_id = ? AND vendor_id = ?',
       [categoryId, userid, vendorId]
