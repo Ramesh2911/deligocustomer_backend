@@ -501,3 +501,67 @@ WHERE o.oid = ? `;
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+
+//=== Reorder by customer===
+export const reorderItems = async (req, res) => {
+  const { orderId } = req.query;
+
+  if (!orderId) {
+    return res.status(400).json({ status: false, message: "order_id is required in query" });
+  }
+
+  try {
+    const sql = `
+      SELECT 
+        oi.product_id, 
+        oi.quantity, 
+        oi.vendor_id, 
+        p.product_cat, 
+        o.user_id 
+      FROM hr_order_item oi
+      LEFT JOIN hr_product p ON p.pid = oi.product_id
+      LEFT JOIN hr_order o ON o.oid = oi.order_id
+      WHERE oi.order_id = ?;
+    `;
+
+    const [rows] = await con.query(sql, [orderId]);
+
+    res.json({
+      status: true,
+      message: "Order items fetched successfully",
+      data: rows,
+    });
+  } catch (error) {
+    console.error("Error fetching order items:", error);
+    res.status(500).json({ status: false, message: "Database error", error: error.message });
+  }
+};
+
+//=== addonnotes ====
+export const addOrderNote = async (req, res) => {
+  const { orderId } = req.query;
+  const { note } = req.body;
+
+  if (!orderId || !note) {
+    return res.status(400).json({ success: false, message: "orderId and note are required" });
+  }
+
+  try {
+    const sql = "UPDATE hr_order SET notes = ? WHERE id = ?";
+    const [result] = await con.query(sql, [note, orderId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Note added successfully",
+      data: { orderId, note }
+    });
+  } catch (error) {
+    console.error("Error inserting note:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
