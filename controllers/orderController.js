@@ -504,14 +504,13 @@ WHERE o.oid = ? `;
 
 //=== Reorder by customer===
 export const reorderItems = async (req, res) => {
-  const { orderId } = req.query;
+  const { orderId } = req.body; 
 
   if (!orderId) {
-    return res.status(400).json({ status: false, message: "order_id is required in query" });
+    return res.status(400).json({ status: false, message: "order_id is required in body" });
   }
 
   try {
-    // 1️⃣ Fetch order items
     const sqlFetch = `
       SELECT 
         oi.product_id, 
@@ -531,7 +530,6 @@ export const reorderItems = async (req, res) => {
       return res.status(404).json({ status: false, message: "No items found for this order" });
     }
 
-    // 2️⃣ Insert into hr_cart_order_item
     const insertPromises = rows.map(item => {
       const sqlInsert = `
         INSERT INTO hr_cart_order_item
@@ -548,8 +546,7 @@ export const reorderItems = async (req, res) => {
     });
 
     await Promise.all(insertPromises);
-
-    // 3️⃣ Respond success
+    
     res.json({
       status: true,
       message: "Items reordered successfully",
@@ -561,7 +558,6 @@ export const reorderItems = async (req, res) => {
     res.status(500).json({ status: false, message: "Database error", error: error.message });
   }
 };
-
 
 //=== addonnotes ====
 export const addOrderNote = async (req, res) => {
