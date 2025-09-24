@@ -12,5 +12,5 @@ orderRoutes.post('/postorder', postOrder);
 orderRoutes.get('/getorders', getOrders);
 orderRoutes.get('/getorderwithitems', getOrderWithItems);
 orderRoutes.post('/reorderItems', reorderItems);
-orderRoutes.post('/addOrderNote', addOrderNote);
+orderRoutes.put('/addOrderNote', addOrderNote);
 export default orderRoutes;

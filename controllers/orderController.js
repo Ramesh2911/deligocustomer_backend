@@ -548,7 +548,7 @@ export const addOrderNote = async (req, res) => {
   }
 
   try {
-    const sql = "UPDATE hr_order SET notes = ? WHERE id = ?";
+    const sql = "UPDATE hr_order SET notes = ? WHERE oid = ?";
     const [result] = await con.query(sql, [note, orderId]);
 
     if (result.affectedRows === 0) {
@@ -557,8 +557,7 @@ export const addOrderNote = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Note added successfully",
-      data: { orderId, note }
+      message: "Note added successfully"
     });
   } catch (error) {
     console.error("Error inserting note:", error);
