@@ -502,7 +502,6 @@ WHERE o.oid = ? `;
   }
 };
 
-
 //=== Reorder by customer===
 export const reorderItems = async (req, res) => {
   const { orderId } = req.query;
@@ -512,12 +511,13 @@ export const reorderItems = async (req, res) => {
   }
 
   try {
-    const sql = `
+    // 1️⃣ Fetch order items
+    const sqlFetch = `
       SELECT 
         oi.product_id, 
         oi.quantity, 
         oi.vendor_id, 
-        p.product_cat, 
+        p.product_cat AS parent_category_id, 
         o.user_id 
       FROM hr_order_item oi
       LEFT JOIN hr_product p ON p.pid = oi.product_id
@@ -525,18 +525,43 @@ export const reorderItems = async (req, res) => {
       WHERE oi.order_id = ?;
     `;
 
-    const [rows] = await con.query(sql, [orderId]);
+    const [rows] = await con.query(sqlFetch, [orderId]);
 
+    if (!rows.length) {
+      return res.status(404).json({ status: false, message: "No items found for this order" });
+    }
+
+    // 2️⃣ Insert into hr_cart_order_item
+    const insertPromises = rows.map(item => {
+      const sqlInsert = `
+        INSERT INTO hr_cart_order_item
+        (user_id, parent_categor_id, product_id, quantity, vendor_id)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      return con.query(sqlInsert, [
+        item.user_id,
+        item.parent_category_id,
+        item.product_id,
+        item.quantity,
+        item.vendor_id
+      ]);
+    });
+
+    await Promise.all(insertPromises);
+
+    // 3️⃣ Respond success
     res.json({
       status: true,
-      message: "Order items fetched successfully",
-      data: rows,
+      message: "Items reordered successfully",
+      data: rows
     });
+
   } catch (error) {
-    console.error("Error fetching order items:", error);
+    console.error("Error reordering items:", error);
     res.status(500).json({ status: false, message: "Database error", error: error.message });
   }
 };
+
 
 //=== addonnotes ====
 export const addOrderNote = async (req, res) => {
