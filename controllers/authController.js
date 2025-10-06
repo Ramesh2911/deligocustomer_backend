@@ -1,13 +1,12 @@
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
-import multer from "multer";
 import con from '../db/db.js';
 import { adminCookie } from '../utils/cookies.js';
 import nodemailer from 'nodemailer';
+import { uploadToS3 } from "../utils/s3Upload.js";
 
 dotenv.config();
 
-const upload = multer({ storage: multer.memoryStorage() });
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 // ===== LOGIN =====
@@ -134,8 +133,6 @@ export const getCountries = async (req, res) => {
 
 // ===== CREATE USER =====
 export const createuser = async (req, res) => {
-  let response = { status: false, message: "" };
-
   try {
     const {
       prefix,
@@ -147,32 +144,36 @@ export const createuser = async (req, res) => {
       zipcode,
       countryid,
       areacode,
-      phone,
+      mobile,
       latitude,
       longitude,
     } = req.body;
 
-    console.log("📩 Incoming body:", req.body);
-    console.log("📷 Uploaded file:", req.file);
-
     if (!firstname || !lastname || !email || !password) {
-      return res.json({ status: false, message: "Missing required fields" });
+      return res.status(400).json({ status: false, message: "Missing required fields" });
     }
-
-    // Check if email exists
+   
     const [rows] = await con.query("SELECT id FROM hr_users WHERE email = ?", [email]);
     if (rows.length > 0) {
-      return res.json({ status: false, message: "Email already exists" });
+      return res.status(409).json({ status: false, message: "Email already exists" });
     }
-
-    // ✅ Hash password before storing
+   
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Insert into hr_users
+  
+    let profilePictureKey = "";
+    if (req.file) {
+      profilePictureKey = await uploadToS3(
+        req.file.buffer,          
+        req.file.originalname,    
+        req.file.mimetype,         
+        "profile/"                
+      );
+    }
+    
     const [result] = await con.query(
       `INSERT INTO hr_users 
-       (prefix, first_name, last_name, password, email, country_id, country_code, mobile, address, pincode, latitude, longitude, role_id,  profile_picture, passport, vehicle_type, is_login_active, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, , ?, '', 0, 'Y', 'Y')`,
+       (prefix, first_name, last_name, password, email, country_id, country_code, mobile, address, pincode, latitude, longitude, role_id, profile_picture, passport, vehicle_type, is_login_active, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, ?, '', 0, 'Y', 'Y')`,
       [
         prefix || "",
         firstname,
@@ -181,18 +182,17 @@ export const createuser = async (req, res) => {
         email,
         countryid || "",
         areacode || "",
-        phone || "",
+        mobile || "",
         address,
         zipcode,
         latitude,
         longitude,
-        req.file ? req.file.originalname : "", 
+        profilePictureKey, 
       ]
     );
 
     const userId = result.insertId;
-
-    // Insert into hr_addresses
+    
     await con.query(
       `INSERT INTO hr_addresses 
        (type, user_id, house, street, city, postal_code, country_code, district, region_id, lat, lng, is_active)
@@ -200,16 +200,17 @@ export const createuser = async (req, res) => {
       [userId, address, zipcode, latitude, longitude]
     );
 
-    response.status = true;
-    response.userid = userId;
-    response.message = "Created successfully.";
-    return res.json(response);
+    return res.status(200).json({
+      status: true,
+      message: " User created successfully.",
+    });
 
   } catch (err) {
     console.error(err);
-    response.status = false;
-    response.message = err.message;
-    return res.json(response);
+    return res.status(500).json({
+      status: false,
+      message: err.message || "Something went wrong",
+    });
   }
 };
 
