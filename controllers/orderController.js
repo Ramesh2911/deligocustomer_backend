@@ -441,7 +441,7 @@ export const getOrderWithItems = async (req, res) => {
     const riderSpeed = settings[0]?.rider_speed || 40; 
    
     let estimatedTime = (60 / riderSpeed) * distanceKm;
-    estimatedTime = estimatedTime < 1 ? "<1 minute" : `${Math.ceil(estimatedTime)} minutes`;
+    estimatedTime = estimatedTime < 1 ? "<1 min" : `${Math.ceil(estimatedTime)} min`;
 
     const OrderDetails = {
       status: true,
