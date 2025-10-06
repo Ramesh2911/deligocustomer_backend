@@ -1,7 +1,7 @@
-import con from '../db/db.js';
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3 } from "../config/awsConfig.js";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
+import con from '../db/db.js';
 
 async function getImageUrl(key) {
   if (!key) return null;
@@ -26,6 +26,27 @@ export const getCheckout = async (req, res) => {
       });
     }
 
+   const [vendorRows] = await con.execute(
+      'SELECT u.id AS vendor_id, u.latitude AS vendor_lat, u.longitude AS vendor_lng, a.lat AS user_lat, a.lng AS user_lng, ( 6371 * ACOS( COS(RADIANS(a.lat)) * COS(RADIANS(u.latitude)) * COS(RADIANS(u.longitude) - RADIANS(a.lng)) + SIN(RADIANS(a.lat)) * SIN(RADIANS(u.latitude)) ) ) AS distance_km FROM hr_users u JOIN hr_addresses a ON a.user_id = ? AND a.is_active = 1 WHERE u.id = ?',
+      [userid,vendorId]
+    );
+if (!vendorRows.length) {
+  return res.status(404).json({ status: 'error', message: 'Vendor or user not found' });
+}
+
+const vendorLocation = vendorRows[0];
+const todistance = Number(vendorLocation.distance_km.toFixed(2)); // ensure numeric
+    
+const [setrows] = await con.execute(
+      `SELECT delivery_rider_charges, 
+              delivery_rider_per_km_price, 
+              delivery_distance_limit_km, 
+              rider_speed 
+       FROM hr_settings`
+    );
+
+  const settings = setrows[0];
+
     const [rows] = await con.query(
       `SELECT 
          hr_product.pid, 
@@ -34,8 +55,9 @@ export const getCheckout = async (req, res) => {
          hr_product.price, 
          hr_cart_order_item.coid,
          hr_cart_order_item.quantity, 
-         hr_cart_order_item.unit_price, 
-         hr_cart_order_item.total_amount
+           hr_product.price,
+          hr_product.tax_percentage,
+           hr_product.tax_price
        FROM hr_cart_order_item
        JOIN hr_product 
          ON hr_product.pid = hr_cart_order_item.product_id
@@ -53,13 +75,15 @@ export const getCheckout = async (req, res) => {
 
     // Calculate subtotal
     const subtotal = rows.reduce(
-      (acc, item) => acc + parseFloat(item.total_amount || 0),
+      (acc, item) => acc + parseFloat(item.price*item.quantity),
       0
     );
 
-    // Static delivery fee for now (can make dynamic later)
-    const deliveryfee = 2.0;
 
+    
+    // Static delivery fee for now (can make dynamic later)
+    //const deliveryfee = 2.0;
+ const deliveryfee = settings.delivery_rider_charges + (todistance * settings.delivery_rider_per_km_price);
     const totalamount = subtotal + deliveryfee;
 
     return res.status(200).json({
@@ -78,7 +102,6 @@ export const getCheckout = async (req, res) => {
     });
   }
 };
-
 
 export const getCheckoutUpdate = async (req, res) => {
   try {

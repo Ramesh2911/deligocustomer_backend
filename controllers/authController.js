@@ -171,8 +171,8 @@ export const createuser = async (req, res) => {
     // Insert into hr_users
     const [result] = await con.query(
       `INSERT INTO hr_users 
-       (prefix, first_name, last_name, password, email, country_id, country_code, mobile, address, pincode, latitude, longitude, role_id, built_in, exclude, profile_picture, passport, vehicle_type, is_login_active, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, 0, 0, ?, '', 0, 'Y', 'Y')`,
+       (prefix, first_name, last_name, password, email, country_id, country_code, mobile, address, pincode, latitude, longitude, role_id,  profile_picture, passport, vehicle_type, is_login_active, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 3, , ?, '', 0, 'Y', 'Y')`,
       [
         prefix || "",
         firstname,
@@ -186,7 +186,7 @@ export const createuser = async (req, res) => {
         zipcode,
         latitude,
         longitude,
-        req.file ? req.file.originalname : "", // save filename if uploaded
+        req.file ? req.file.originalname : "", 
       ]
     );
 

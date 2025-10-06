@@ -3,6 +3,34 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3 } from "../config/awsConfig.js";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
+
+// Function to calculate distance between two coordinates in kilometers
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) *
+      Math.cos(deg2rad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in km
+}
+
+// Helper to convert degrees to radians
+function deg2rad(deg) {
+  return deg * (Math.PI / 180);
+}
+
+// Example usage:
+
+
+
 async function getImageUrl(key) {
   if (!key) return null;
   const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
@@ -31,6 +59,29 @@ export const postOrder = async (req, res) => {
     }
     const address = addressRows[0];
 
+ // 1. Fetch active address for user
+    const [vendorRows] = await con.execute(
+      'SELECT u.id AS vendor_id, u.latitude AS vendor_lat, u.longitude AS vendor_lng, a.lat AS user_lat, a.lng AS user_lng, ( 6371 * ACOS( COS(RADIANS(a.lat)) * COS(RADIANS(u.latitude)) * COS(RADIANS(u.longitude) - RADIANS(a.lng)) + SIN(RADIANS(a.lat)) * SIN(RADIANS(u.latitude)) ) ) AS distance_km FROM hr_users u JOIN hr_addresses a ON a.user_id = ? AND a.is_active = 1 WHERE u.id = ?',
+      [userid,vendorid]
+    );
+
+const [rows] = await con.execute(
+      `SELECT delivery_rider_charges, 
+              delivery_rider_per_km_price, 
+              delivery_distance_limit_km, 
+              rider_speed 
+       FROM hr_settings`
+    );
+
+  const settings = rows[0];
+
+
+    if (vendorRows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'No active latlong found for user' });
+    }
+    const vandorloaction = vendorRows[0];
+
+
     // 2. Sum total_amount from cart
     const [cartSumRows] = await con.execute(
       `SELECT hcoi.vendor_id, hcoi.quantity, hp.price 
@@ -42,37 +93,59 @@ export const postOrder = async (req, res) => {
       [catid, vendorid, userid]
     );
 
+
     if (cartSumRows.length === 0) {
       return res.status(400).json({ status: 'error', message: 'No items found in cart' });
     }
 
+//const distance = getDistanceFromLatLonInKm(address.lat, address.lng, vandorloaction.latitude, vandorloaction.longitude); // Delhi to Mumbai
+
+const distance = getDistanceFromLatLonInKm(
+  Number(address.lat),
+  Number(address.lng),
+  Number(vandorloaction.latitude),
+  Number(vandorloaction.longitude)
+);
+
+//const todistance = distance.toFixed(2);
+
+const todistance = 12;
     // Calculate product total
     const ptval = cartSumRows.reduce((acc, row) => acc + (row.quantity * row.price), 0);
-    const deliveryfee = 2.0; // TODO: dynamic per vendor/config
+    //const deliveryfee = settings.delivery_rider_charges + (todistance * settings.delivery_rider_per_km_price);
+     const deliveryfee = 3.00;
     const totalAmount = ptval + deliveryfee;
+
+
+
+
+
+
+
 
     // 3. Insert into hr_order
     const [orderResult] = await con.execute(
       `INSERT INTO hr_order (
         user_id, vendor_id, product_amount, delivery_amount, discount, tax_amount, total_amount,
-        payment_method, full_name, mobile, latitude, longitude, shipping_address, billing_address
+        payment_method, full_name, mobile, latitude, longitude, shipping_address, billing_address,vendor_customer_distance
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        userid,
-        vendorid,
-        Number(ptval.toFixed(2)),
-        Number(deliveryfee.toFixed(2)),
-        0.00, // discount
-        0.00, // tax_amount (order-level, can recalc later)
-        Number(totalAmount.toFixed(2)),
-        paymentmethod || 1,
-        address.full_name,
-        address.mobile,
-        address.lat,
-        address.lng,
-        address.house,
-        address.house,
-      ]
+          [
+        userid,          // 1
+        vendorid,        // 2
+        Number(ptval.toFixed(2)), // 3
+        Number(deliveryfee.toFixed(2)), // 4
+        0.00,            // 5 discount
+        0.00,            // 6 tax
+        Number(totalAmount.toFixed(2)), // 7
+        paymentmethod || 1, // 8
+        address.full_name,  // 9
+        address.mobile,     // 10
+        address.lat,        // 11
+        address.lng,        // 12
+        address.house,      // 13 shipping_address
+        address.house,      // 14 billing_address
+        todistance          // 15
+      ] 
     );
 
     const lastInsertId = orderResult.insertId;
@@ -198,161 +271,90 @@ export const getOrders = async (req, res) => {
   }
 };
 
-// export const getOrderWithItems = async (req, res) => {
-//   try {
-//     const { orderId } = req.query;
-//     if (!orderId) {
-//       return res.status(400).json({ error: "orderId is required" });
-//     }
 
-//     const sql = `
-//      SELECT 
-//     o.oid AS order_id,
-//     o.user_id,
-//     o.vendor_id,
-//     o.product_amount,
-//     o.delivery_amount,
-//     o.discount AS order_discount,
-//     o.tax_amount AS order_tax,
-//     o.total_amount AS order_total,
-//     o.payment_method,
-//     o.full_name,
-//     o.mobile,
-//     o.shipping_address,
-//     o.billing_address,
-//     o.status AS order_status,
-//     o.notes,
-//     o.created_time,
+//=== Reorder by customer===
+export const reorderItems = async (req, res) => {
+  const { orderId } = req.body; 
 
-//     -- Delivery details
-//     d.id AS delivery_id,
-//     d.rating AS delivery_rating,
-//     d.first_name AS delivery_name,
-//     d.mobile AS delivery_mobile,
-//     d.profile_picture AS delivery_profile_picture,
+  if (!orderId) {
+    return res.status(400).json({ status: false, message: "order_id is required in body" });
+  }
 
-//     -- Order items
-//     i.oiid AS item_id,
-//     i.product_id,
-//     i.product_name,
-//     i.sku,
-//     i.quantity,
-//     i.unit_price,
-//     i.discount AS item_discount,
-//     i.total_price,
-//     i.tax_amount AS item_tax,
-//     i.total_amount AS item_total,
-//     i.status AS item_status,
-//     p.product_image,   
+  try {
+    const sqlFetch = `
+      SELECT 
+        oi.product_id, 
+        oi.quantity, 
+        oi.vendor_id, 
+        p.product_cat AS parent_category_id, 
+        o.user_id 
+      FROM hr_order_item oi
+      LEFT JOIN hr_product p ON p.pid = oi.product_id
+      LEFT JOIN hr_order o ON o.oid = oi.order_id
+      WHERE oi.order_id = ?;
+    `;
 
-//     -- User active address
-//     a.lat AS user_latitude,
-//     a.lng AS user_longitude,
+    const [rows] = await con.query(sqlFetch, [orderId]);
 
-//     -- Vendor details
-//     v.business_name,
-//     v.company_name,
-//     v.shop_logo,
-//     v.latitude AS vendor_latitude,
-//     v.longitude AS vendor_longitude
+    if (!rows.length) {
+      return res.status(404).json({ status: false, message: "No items found for this order" });
+    }
 
-// FROM hr_order o
-// LEFT JOIN hr_order_item i 
-//     ON o.oid = i.order_id
-// LEFT JOIN hr_product p               
-// -- ✅ join product table
-//     ON p.pid = i.product_id
-// LEFT JOIN hr_users d
-//     ON o.delivery_id = d.id
-// LEFT JOIN hr_addresses a
-//     ON a.user_id = o.user_id AND a.is_active = 1
-// LEFT JOIN hr_users v
-//     ON v.id = o.vendor_id
-// WHERE o.oid = ? `;
+    const insertPromises = rows.map(item => {
+      const sqlInsert = `
+        INSERT INTO hr_cart_order_item
+        (user_id, parent_categor_id, product_id, quantity, vendor_id)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+      return con.query(sqlInsert, [
+        item.user_id,
+        item.parent_category_id,
+        item.product_id,
+        item.quantity,
+        item.vendor_id
+      ]);
+    });
 
-//    // console.log("Executing SQL:", sql, "with orderId:", orderId);
+    await Promise.all(insertPromises);
+    
+    res.json({
+      status: true,
+      message: "Items reordered successfully",
+      data: rows
+    });
 
-//     const [results] = await con.query(sql, [orderId]);
+  } catch (error) {
+    console.error("Error reordering items:", error);
+    res.status(500).json({ status: false, message: "Database error", error: error.message });
+  }
+};
 
-//     if (!results || results.length === 0) {
-//       console.warn("⚠️ No order found for ID:", orderId);
-//       return res.status(404).json({ message: "Order not found" });
-//     }
+//=== addonnotes ====
+export const addOrderNote = async (req, res) => {
+  const { orderId } = req.query;
+  const { note } = req.body;
 
-//      // Build order object
-//     const OrderDetails = {
-//       status:true,
-//       orderId: results[0].order_id,
-//       user_id: results[0].user_id,
-//       vendor_id: results[0].vendor_id,
-//       product_amount: Number(results[0].product_amount),
-//       delivery_amount: Number(results[0].delivery_amount),
-//       discount: Number(results[0].order_discount),
-//       tax_amount: Number(results[0].order_tax),
-//       total_amount: Number(results[0].order_total),
-//       payment_method: results[0].payment_method,
-//       full_name: results[0].full_name,
-//       mobile: results[0].mobile,
-//       shipping_address: results[0].shipping_address,
-//       billing_address: results[0].billing_address,
-//       deliverystatus: results[0].order_status,
-//       notes: results[0].notes,
-//       created_time: results[0].created_time,
+  if (!orderId || !note) {
+    return res.status(400).json({ success: false, message: "orderId and note are required" });
+  }
 
-//       deliveryPartner: results[0].delivery_id
-//         ? {
-//             id: results[0].delivery_id,
-//             name: results[0].delivery_name,
-//             rating: results[0].delivery_rating,
-//             phone: results[0].delivery_mobile,
-//             image: results[0].delivery_profile_picture,
-//           }
-//         : null,
+  try {
+    const sql = "UPDATE hr_order SET notes = ? WHERE oid = ?";
+    const [result] = await con.query(sql, [note, orderId]);
 
-//       user_latitude: Number(results[0].user_latitude),
-//       user_longitude: Number(results[0].user_longitude),
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
 
-//       storeName: results[0].business_name,
-//       vendor_company_name: results[0].company_name,
-//       vendor_latitude: Number(results[0].vendor_latitude),
-//       vendor_longitude: Number(results[0].vendor_longitude),
-//       storeImage: results[0].shop_logo,
-
-//       deliverystatus: "delivered", 
-//       estimatedTime: "8 minutes",
-
-//       payment: {
-//         subtotal: Number(results[0].product_amount),
-//         deliveryFee: Number(results[0].delivery_amount),
-//         tax: Number(results[0].order_tax),
-//         total: Number(results[0].order_total),
-//       },
-
-//       items: results
-//         .filter((row) => row.item_id) // only valid rows with items
-//         .map((row) => ({
-//           //id: row.item_id,
-//           id: row.product_id,
-//           name: row.product_name,
-//           image: row.product_image,
-//           quantity: Number(row.quantity),
-//           price: Number(row.total_price),
-//           //discount: Number(row.item_discount),
-//          // total_price: Number(row.total_price),
-//          // tax_amount: Number(row.item_tax),
-//          // total_amount: Number(row.item_total),
-//          // status: row.item_status,
-//         })),
-//     };
-
-//     //console.log("✅ Final Order Object:", JSON.stringify(OrderDetails, null, 2));
-//     res.json(OrderDetails);
-
-//   } catch (error) {
-//     console.error("❌ Unexpected Error:", error);
-//     res.status(500).json({ error: "Something went wrong" });
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      message: "Note added successfully"
+    });
+  } catch (error) {
+    console.error("Error inserting note:", error);
+    return res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
 
 
 export const getOrderWithItems = async (req, res) => {
@@ -499,89 +501,5 @@ WHERE o.oid = ? `;
   } catch (error) {
     console.error("❌ Unexpected Error:", error);
     res.status(500).json({ error: "Something went wrong" });
-  }
-};
-
-//=== Reorder by customer===
-export const reorderItems = async (req, res) => {
-  const { orderId } = req.body; 
-
-  if (!orderId) {
-    return res.status(400).json({ status: false, message: "order_id is required in body" });
-  }
-
-  try {
-    const sqlFetch = `
-      SELECT 
-        oi.product_id, 
-        oi.quantity, 
-        oi.vendor_id, 
-        p.product_cat AS parent_category_id, 
-        o.user_id 
-      FROM hr_order_item oi
-      LEFT JOIN hr_product p ON p.pid = oi.product_id
-      LEFT JOIN hr_order o ON o.oid = oi.order_id
-      WHERE oi.order_id = ?;
-    `;
-
-    const [rows] = await con.query(sqlFetch, [orderId]);
-
-    if (!rows.length) {
-      return res.status(404).json({ status: false, message: "No items found for this order" });
-    }
-
-    const insertPromises = rows.map(item => {
-      const sqlInsert = `
-        INSERT INTO hr_cart_order_item
-        (user_id, parent_categor_id, product_id, quantity, vendor_id)
-        VALUES (?, ?, ?, ?, ?)
-      `;
-      return con.query(sqlInsert, [
-        item.user_id,
-        item.parent_category_id,
-        item.product_id,
-        item.quantity,
-        item.vendor_id
-      ]);
-    });
-
-    await Promise.all(insertPromises);
-    
-    res.json({
-      status: true,
-      message: "Items reordered successfully",
-      data: rows
-    });
-
-  } catch (error) {
-    console.error("Error reordering items:", error);
-    res.status(500).json({ status: false, message: "Database error", error: error.message });
-  }
-};
-
-//=== addonnotes ====
-export const addOrderNote = async (req, res) => {
-  const { orderId } = req.query;
-  const { note } = req.body;
-
-  if (!orderId || !note) {
-    return res.status(400).json({ success: false, message: "orderId and note are required" });
-  }
-
-  try {
-    const sql = "UPDATE hr_order SET notes = ? WHERE oid = ?";
-    const [result] = await con.query(sql, [note, orderId]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ success: false, message: "Order not found" });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Note added successfully"
-    });
-  } catch (error) {
-    console.error("Error inserting note:", error);
-    return res.status(500).json({ success: false, message: "Internal Server Error" });
   }
 };
