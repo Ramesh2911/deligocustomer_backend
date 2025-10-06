@@ -27,10 +27,6 @@ function deg2rad(deg) {
   return deg * (Math.PI / 180);
 }
 
-// Example usage:
-
-
-
 async function getImageUrl(key) {
   if (!key) return null;
   const cleanedKey = key.replace(/^https?:\/\/[^/]+\/[^/]+\//, "");
@@ -271,7 +267,6 @@ export const getOrders = async (req, res) => {
   }
 };
 
-
 //=== Reorder by customer===
 export const reorderItems = async (req, res) => {
   const { orderId } = req.body; 
@@ -356,7 +351,7 @@ export const addOrderNote = async (req, res) => {
   }
 };
 
-
+//=== order details by customer====
 export const getOrderWithItems = async (req, res) => {
   try {
     const { orderId } = req.query;
@@ -366,67 +361,66 @@ export const getOrderWithItems = async (req, res) => {
 
     const sql = `
      SELECT 
-    o.oid AS order_id,
-    o.user_id,
-    o.vendor_id,
-    o.product_amount,
-    o.delivery_amount,
-    o.discount AS order_discount,
-    o.tax_amount AS order_tax,
-    o.total_amount AS order_total,
-    o.payment_method,
-    o.full_name,
-    o.mobile,
-    o.shipping_address,
-    o.billing_address,
-    o.status AS order_status,
-    o.notes,
-    o.created_time,
+      o.oid AS order_id,
+      o.user_id,
+      o.vendor_id,
+      o.product_amount,
+      o.delivery_amount,
+      o.discount AS order_discount,
+      o.tax_amount AS order_tax,
+      o.total_amount AS order_total,
+      o.payment_method,
+      o.full_name,
+      o.mobile,
+      o.shipping_address,
+      o.billing_address,
+      o.status AS order_status,
+      o.notes,
+      o.created_time,
 
-    -- Delivery details
-    d.id AS delivery_id,
-    d.rating AS delivery_rating,
-    d.first_name AS delivery_name,
-    d.mobile AS delivery_mobile,
-    d.profile_picture AS delivery_profile_picture,
+      -- Delivery details
+      d.id AS delivery_id,
+      d.rating AS delivery_rating,
+      d.first_name AS delivery_name,
+      d.mobile AS delivery_mobile,
+      d.profile_picture AS delivery_profile_picture,
 
-    -- Order items
-    i.oiid AS item_id,
-    i.product_id,
-    i.product_name,
-    i.sku,
-    i.quantity,
-    i.unit_price,
-    i.discount AS item_discount,
-    i.total_price,
-    i.tax_amount AS item_tax,
-    i.total_amount AS item_total,
-    i.status AS item_status,
-    p.product_image,   
+      -- Order items
+      i.oiid AS item_id,
+      i.product_id,
+      i.product_name,
+      i.sku,
+      i.quantity,
+      i.unit_price,
+      i.discount AS item_discount,
+      i.total_price,
+      i.tax_amount AS item_tax,
+      i.total_amount AS item_total,
+      i.status AS item_status,
+      p.product_image,   
 
-    -- User active address
-    a.lat AS user_latitude,
-    a.lng AS user_longitude,
+      -- User active address
+      a.lat AS user_latitude,
+      a.lng AS user_longitude,
 
-    -- Vendor details
-    v.business_name,
-    v.company_name,
-    v.shop_logo,
-    v.latitude AS vendor_latitude,
-    v.longitude AS vendor_longitude
-
-FROM hr_order o
-LEFT JOIN hr_order_item i 
-    ON o.oid = i.order_id
-LEFT JOIN hr_product p               
-    ON p.pid = i.product_id
-LEFT JOIN hr_users d
-    ON o.delivery_id = d.id
-LEFT JOIN hr_addresses a
-    ON a.user_id = o.user_id AND a.is_active = 1
-LEFT JOIN hr_users v
-    ON v.id = o.vendor_id
-WHERE o.oid = ? `;
+      -- Vendor details
+      v.business_name,
+      v.company_name,
+      v.shop_logo,
+      v.latitude AS vendor_latitude,
+      v.longitude AS vendor_longitude
+    FROM hr_order o
+    LEFT JOIN hr_order_item i 
+        ON o.oid = i.order_id
+    LEFT JOIN hr_product p               
+        ON p.pid = i.product_id
+    LEFT JOIN hr_users d
+        ON o.delivery_id = d.id
+    LEFT JOIN hr_addresses a
+        ON a.user_id = o.user_id AND a.is_active = 1
+    LEFT JOIN hr_users v
+        ON v.id = o.vendor_id
+    WHERE o.oid = ? `;
 
     const [results] = await con.query(sql, [orderId]);
 
@@ -435,6 +429,19 @@ WHERE o.oid = ? `;
     }
 
     const firstRow = results[0];
+   
+    const distanceKm = getDistanceFromLatLonInKm(
+      Number(firstRow.user_latitude),
+      Number(firstRow.user_longitude),
+      Number(firstRow.vendor_latitude),
+      Number(firstRow.vendor_longitude)
+    );
+   
+    const [settings] = await con.query("SELECT rider_speed FROM hr_settings LIMIT 1");
+    const riderSpeed = settings[0]?.rider_speed || 40; 
+   
+    let estimatedTime = (60 / riderSpeed) * distanceKm;
+    estimatedTime = estimatedTime < 1 ? "<1 minute" : `${Math.ceil(estimatedTime)} minutes`;
 
     const OrderDetails = {
       status: true,
@@ -474,8 +481,8 @@ WHERE o.oid = ? `;
       vendor_longitude: Number(firstRow.vendor_longitude),
       storeImage: await getImageUrl(firstRow.shop_logo),
 
-      deliverystatus: "delivered", // demo only
-      estimatedTime: "8 minutes",
+      distance_km: Number(distanceKm.toFixed(2)), 
+      estimatedTime, 
 
       payment: {
         subtotal: Number(firstRow.product_amount),

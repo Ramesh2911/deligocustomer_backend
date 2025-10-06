@@ -1,7 +1,7 @@
 import app from './app.js';
 import db from './db/db.js';
 
-const DEFAULT_PORT = 3002;
+const DEFAULT_PORT = 8000;
 
 (async () => {
   try {
