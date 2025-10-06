@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import con from '../db/db.js';
 import { adminCookie } from '../utils/cookies.js';
 import nodemailer from 'nodemailer';
-import { uploadToS3 } from "../utils/s3Upload.js";
+import { uploadToS3 } from "../utils/s3.js";
 
 dotenv.config();
 
