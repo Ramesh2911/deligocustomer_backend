@@ -17,12 +17,12 @@ export const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         status: false,
-        message: 'Email and password are required',
+        message: "Email and password are required",
       });
     }
-
+    
     const [rows] = await con.query(
-      `SELECT hr_users.*, hr_addresses.id AS address_id, hr_addresses.you_are_here, hr_addresses.house as address_name
+      `SELECT hr_users.*, hr_addresses.id AS address_id, hr_addresses.you_are_here, hr_addresses.house AS address_name
        FROM hr_users
        LEFT JOIN hr_addresses ON hr_users.id = hr_addresses.user_id
        WHERE hr_users.role_id = '3'
@@ -35,56 +35,31 @@ export const login = async (req, res) => {
     if (rows.length === 0) {
       return res.status(400).json({
         status: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
 
     const user = rows[0];
-
-    // ✅ Fix PHP hash issue ($2y$ → $2a$)
+   
     let dbPassword = user.password;
     if (dbPassword.startsWith("$2y$")) {
       dbPassword = "$2a$" + dbPassword.slice(4);
     }
 
-    // ✅ Compare password with hash
+    
     const isMatch = await bcrypt.compare(password, dbPassword);
     if (!isMatch) {
       return res.status(400).json({
         status: false,
-        message: 'Invalid credentials',
+        message: "Invalid credentials",
       });
     }
-
-    const fullname = `${user.first_name} ${user.last_name}`;
-
-    const responseData = {
-      status: 'success',
-      role: user.role_id,
-      userid: user.id,
-      profileimage: user.profile_picture,
-      prefix: user.prefix,
-      fmname: user.first_name,
-      lmname: user.last_name,
-      fullname: fullname,
-      you_are_here: user.you_are_here,
-      email: user.email,
-      mobile: user.mobile,
-      address_name: user.address_name,
-      setcurrentcategory: '0'
-    };
-
-    // ✅ Set auth cookie
-    adminCookie(process.env.JWT_SECRET, user, res, `${fullname} logged in`);
-
-    return res.json(responseData);
+    
+    await adminCookie(process.env.JWT_SECRET, user, res, `${user.first_name} ${user.last_name} logged in`);
 
   } catch (error) {
-    console.error('Login Error:', error.message);
-    return res.status(500).json({
-      status: false,
-      message: 'Server error',
-    });
+    console.error("Login Error:", error.message);
+    res.status(500).json({ status: false, message: "Server error" });
   }
 };
 
@@ -195,8 +170,8 @@ export const createuser = async (req, res) => {
     
     await con.query(
       `INSERT INTO hr_addresses 
-       (type, user_id, house, street, city, postal_code, country_code, district, region_id, lat, lng, is_active)
-       VALUES (1, ?, ?, '', '', ?, NULL, NULL, 0, ?, ?, 1)`,
+       (type, user_id, you_are_here, house, street, city, postal_code, country_code, district, region_id, lat, lng, is_active)
+       VALUES (1, ?,'Home', ?, '', '', ?, NULL, NULL, 0, ?, ?, 1)`,
       [userId, address, zipcode, latitude, longitude]
     );
 
