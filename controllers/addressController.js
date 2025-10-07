@@ -1,5 +1,6 @@
 import con from '../db/db.js';
 
+//====getAddress=====
 export const getAddress = async (req, res) => {
   try {
         const { userId } = req.query;
@@ -10,10 +11,9 @@ export const getAddress = async (req, res) => {
         message: 'User ID is required in query parameter (?userId=)',
       });
     }
-
-    // ✅ Fetch address from DB
+    
     const [rows] = await con.query(
-      `SELECT id, type,you_are_here, user_id, is_active,house as address_name FROM hr_addresses WHERE user_id = ?`,
+      `SELECT id, type,you_are_here, user_id,postal_code, is_active,house as address_name FROM hr_addresses WHERE user_id = ?`,
       [userId]
     );
 
@@ -32,62 +32,7 @@ export const getAddress = async (req, res) => {
   }
 };
 
-//====updateAddress=====
-export const orderAccept = async (req, res) => {
-  let connection;
-
-  try {
-    const { orderId, userId, latitude, longitude } = req.body;
-
-    if (!orderId || !userId) {
-      return res.status(400).json({
-        status: false,
-        message: 'orderId and userId are required',
-      });
-    }
-
-    // 🔑 Get a connection from the pool
-    connection = await con.getConnection();
-    await connection.beginTransaction();
-
-    // 1️⃣ Atomic update: accept only if still unassigned
-    const [activateResult] = await connection.query(
-      `UPDATE hr_order 
-       SET delivery_id = ?, 
-           delivery_accept_latitude = ?, 
-           delivery_accept_longitude = ? 
-       WHERE oid = ? 
-         AND status = 2 
-         AND (delivery_id = 0 OR delivery_id IS NULL)`,
-      [userId, latitude || null, longitude || null, orderId]
-    );
-
-    if (activateResult.affectedRows === 0) {
-      await connection.rollback();
-      return res.status(404).json({
-        status: false,
-        message: 'Order already accepted or invalid',
-      });
-    }
-
-    // 2️⃣ Commit the transaction
-    await connection.commit();
-
-    // 3️⃣ Success response
-    return res.json({
-      status: true,
-      message: 'Order accepted successfully',
-    });
-
-  } catch (err) {
-    console.error('❌ Error in orderAccept:', err);
-    if (connection) await connection.rollback();
-    return res.status(500).json({ status: false, message: 'Server error' });
-  } finally {
-    if (connection) connection.release(); // 🔑 Release the connection back to pool
-  }
-};
-
+//====addAddress=====
 export const addAddress = async (req, res) => {
   try {
     const data = req.body;
