@@ -13,6 +13,8 @@ import productRoutes from './routes/productRoutes.js';
 import storeRoutes from './routes/storeRoutes.js';
 import wishlistRoutes from './routes/wishlistRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
+
 config({
     path: './config.env'
 });
@@ -38,4 +40,6 @@ app.use('/api', storeRoutes);
 app.use('/api', wishlistRoutes);
 app.use('/api', authRoute);
 app.use('/api', homeRoutes);
+app.use('/api', notificationRoutes);
+
 export default app;
