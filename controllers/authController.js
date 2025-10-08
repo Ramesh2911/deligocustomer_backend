@@ -234,6 +234,83 @@ export const changePassword = async (req, res) => {
 };
 
 //=====forgotPassword====
+// export const sendResetOtp = async (req, res) => {
+//   const { email, phone } = req.body;
+
+//   if (!email && !phone) {
+//     return res.status(400).json({ status: false, message: 'Email or phone is required' });
+//   }
+
+//   try {
+//     let query = '';
+//     let value = '';
+//     if (email) {
+//       query = 'SELECT * FROM hr_users WHERE email = ?';
+//       value = email;
+//     } else {
+//       query = 'SELECT * FROM hr_users WHERE phone = ?';
+//       value = phone;
+//     }
+
+//     const [result] = await con.query(query, [value]);
+
+//     if (result.length === 0) {
+//       return res.status(404).json({ status: false, message: 'User not found' });
+//     }
+
+//     const otp = generateOTP();
+
+//     if (email) {
+//       const transporter = nodemailer.createTransport({
+//         host: process.env.MAILER_HOST,
+//         port: Number(process.env.MAILER_PORT),
+//         secure: false,
+//         auth: {
+//           user: process.env.MAILER_USER,
+//           pass: process.env.MAILER_PASSWORD,
+//         },
+//         tls: {
+//           ciphers: 'SSLv3',
+//           rejectUnauthorized: false,
+//         },
+//       });
+
+//       const mailOptions = {
+//         from: `"${process.env.MAILER_SENDER_NAME}" <${process.env.MAILER_USER}>`,
+//         to: email,
+//         subject: 'Password Reset OTP',
+//         text: `Your OTP for password reset is: ${otp}`,
+//       };
+
+//       await transporter.sendMail(mailOptions);
+
+//       await con.query(
+//         'INSERT INTO hr_mail_otp (mail, otp, create_time) VALUES (?, ?, NOW())',
+//         [email, otp]
+//       );
+//     }
+
+//     if (phone) {
+//       await client.messages.create({
+//         body: `Your OTP for password reset is: ${otp}`,
+//         from: process.env.TWILIO_PHONE_NUMBER,
+//         to: phone.startsWith('+') ? phone : `+91${phone}`,
+//       });
+
+//       // Optional: Insert into phone OTP table here
+//     }
+
+//     return res.status(200).json({
+//       status: true,
+//       message: 'OTP sent successfully',
+//     });
+
+//   } catch (error) {
+//     console.error('Error in sendResetOtp:', error);
+//     return res.status(500).json({ status: false, message: 'Internal server error' });
+//   }
+// };
+
 export const sendResetOtp = async (req, res) => {
   const { email, phone } = req.body;
 
@@ -244,6 +321,7 @@ export const sendResetOtp = async (req, res) => {
   try {
     let query = '';
     let value = '';
+
     if (email) {
       query = 'SELECT * FROM hr_users WHERE email = ?';
       value = email;
@@ -279,25 +357,31 @@ export const sendResetOtp = async (req, res) => {
         from: `"${process.env.MAILER_SENDER_NAME}" <${process.env.MAILER_USER}>`,
         to: email,
         subject: 'Password Reset OTP',
-        text: `Your OTP for password reset is: ${otp}`,
+        text: `Your OTP for password reset is: ${otp}. It is valid for 15 minutes.`,
       };
 
       await transporter.sendMail(mailOptions);
 
+      // Store OTP with 15 min validity
       await con.query(
-        'INSERT INTO hr_mail_otp (mail, otp, create_time) VALUES (?, ?, NOW())',
+        `INSERT INTO hr_mail_otp (mail, otp, create_time, expire_time)
+         VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 15 MINUTE))`,
         [email, otp]
       );
     }
 
     if (phone) {
       await client.messages.create({
-        body: `Your OTP for password reset is: ${otp}`,
+        body: `Your OTP for password reset is: ${otp}. It is valid for 15 minutes.`,
         from: process.env.TWILIO_PHONE_NUMBER,
         to: phone.startsWith('+') ? phone : `+91${phone}`,
       });
 
-      // Optional: Insert into phone OTP table here
+      await con.query(
+        `INSERT INTO hr_phone_otp (phone, otp, create_time, expire_time)
+         VALUES (?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 15 MINUTE))`,
+        [phone, otp]
+      );
     }
 
     return res.status(200).json({
@@ -310,6 +394,7 @@ export const sendResetOtp = async (req, res) => {
     return res.status(500).json({ status: false, message: 'Internal server error' });
   }
 };
+
 
 //==== resendResetOtp====
 export const resendResetOtp = async (req, res) => {
