@@ -70,3 +70,28 @@ export const getUnreadNotificationCount = async (req, res) => {
   }
 };
 
+//====markNotificationsAsRead=====
+export const markNotificationsAsRead = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ status: false, message: 'userId is required' });
+    }
+
+    const [result] = await con.query(
+      `UPDATE hr_notification SET readwrite = 1 WHERE userId = ? AND readwrite = 0`,
+      [userId]
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: 'Notifications marked as read successfully',
+      affectedRows: result.affectedRows
+    });
+  } catch (error) {
+    console.error('Error updating notifications:', error);
+    return res.status(500).json({ status: false, message: 'Internal server error' });
+  }
+};
+
