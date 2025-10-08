@@ -80,7 +80,7 @@ export const markNotificationsAsRead = async (req, res) => {
     }
 
     const [result] = await con.query(
-      `UPDATE hr_notification SET readwrite = 1 WHERE userId = ? AND readwrite = 0`,
+      `UPDATE hr_notification SET readwrite = 1 WHERE user_id = ? AND readwrite = 0`,
       [userId]
     );
 
