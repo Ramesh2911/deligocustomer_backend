@@ -257,3 +257,34 @@ export const getMyCart = async (req, res) => {
     res.status(500).json({ error: "Something went wrong" });
   }
 };
+
+//===== removeCartItem=====
+export const removeCartItem = async (req, res) => {
+  try {
+    const { coid, user_id } = req.body;
+
+    if (!coid || !user_id) {
+      return res.status(400).json({ status: false, message: "coid and user_id are required" });
+    }
+   
+    const [rows] = await con.query(
+      "SELECT * FROM hr_cart_order_item WHERE coid = ? AND user_id = ?",
+      [coid, user_id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ status: false, message: "Cart item not found" });
+    }
+   
+    await con.query(
+      "DELETE FROM hr_cart_order_item WHERE coid = ? AND user_id = ?",
+      [coid, user_id]
+    );
+
+    return res.json({ status: true, message: "Item removed successfully" });
+  } catch (error) {
+    console.error("Error removing cart item:", error);
+    return res.status(500).json({ status: false, message: "Something went wrong" });
+  }
+};
+
