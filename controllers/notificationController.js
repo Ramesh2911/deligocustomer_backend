@@ -35,5 +35,38 @@ export const getUserNotifications = async (req, res) => {
   }
 };
 
+//====getUnreadNotificationCount=====
+export const getUnreadNotificationCount = async (req, res) => {
+  try {
+    const { userId } = req.query;
 
+    if (!userId) {
+      return res.status(400).json({ status: false, message: "userId is required" });
+    }
+
+     const userIdInt = parseInt(userId, 10); 
+
+    const [rows] = await con.query(
+      `SELECT COUNT(*) AS totalUnread 
+       FROM hr_notification 
+       WHERE user_id = ? AND readwrite = 0`,
+      [userIdInt]
+    );
+
+    const totalUnread = rows[0]?.totalUnread || 0;
+
+    return res.status(200).json({
+      status: true,
+      message: "Unread notifications count fetched successfully",
+      totalUnread
+    });
+
+  } catch (error) {
+    console.error("Error fetching unread notification count:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Server error while fetching unread notifications"
+    });
+  }
+};
 
