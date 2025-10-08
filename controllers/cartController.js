@@ -223,7 +223,6 @@ export const getMyCart = async (req, res) => {
 
       if (!byVendor.has(r.vendor_id)) {
         byVendor.set(r.vendor_id, {
-          coid: Number(r.coid),
           id: String(r.vendor_id),
           name: r.business_name || r.company_name,
           image: await getImageUrl(r.shop_logo) || null,
@@ -235,6 +234,7 @@ export const getMyCart = async (req, res) => {
       }
 
       byVendor.get(r.vendor_id).items.push({
+        coid: Number(r.coid),
         id: String(r.product_id),
         name: r.product_name,
         image: await getImageUrl(r.product_image) || null,
