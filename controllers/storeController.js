@@ -126,7 +126,7 @@ export const getStore = async (req, res) => {
         rating: parseFloat(store.rating) ,
         deliveryTime: store.delivery_time ,
         acceptOrdersTill: store.accept_orders_till ,
-        offers: ["Free delivery on orders above ₹299", "20% off on first order"],
+        offers: ["Free delivery on orders above €299", "20% off on first order"],
         category: store.category_name,
         distance: store.distance ,
         deliveryFee: store.delivery_fee || 0,
